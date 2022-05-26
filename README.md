@@ -1,3 +1,11 @@
+# 在windows下编译
+
+1. 下载`https://github.com/KhronosGroup/OpenCL-SDK`中最新的Release版本，比如说：[OpenCL-SDK-v2022.04.01-Win-x64.zip](https://github.com/KhronosGroup/OpenCL-SDK/releases/download/v2022.04.01/OpenCL-SDK-v2022.04.01-Win-x64.zip)，解压缩后放置到某个文件夹，比如说`C:\OpenCL-SDK-2022.4.1-win32`
+2. 编译clinfo
+```
+make.cmd /D OPENCLDIR=C:\OpenCL-SDK-2022.4.1-win32
+```
+
 # What is this?
 
 clinfo is a simple command-line application that enumerates all possible
