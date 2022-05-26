@@ -27,7 +27,7 @@ HDR =	src/error.h \
 	src/strbuf.h
 
 CFLAGS = /GL /Ox /W4 /Zi /I"$(OPENCLDIR)\include" /nologo
-LIBS = libOpenCL.a
+LIBS = libOpenCL.lib
 
 # TODO there's most likely a better way to do the multiarch
 # switching
@@ -46,8 +46,8 @@ ARCH=32
 
 !MESSAGE Building for $(ARCH)-bit (processor architecture: $(PROCESSOR_ARCHITECTURE), platform: $(PLATFORM))
 
-LIBPATH32 = /LIBPATH:"$(OPENCLDIR)\lib" /LIBPATH:"$(OPENCLDIR)\lib\x86"
-LIBPATH64 = /LIBPATH:"$(OPENCLDIR)\lib\x64" /LIBPATH:"$(OPENCLDIR)\lib\x86_64" /LIBPATH:"$(OPENCLDIR)\lib\x86_amd64"
+LIBPATH32 = /LIBPATH:"$(OPENCLDIR)\lib" /LIBPATH:"$(OPENCLDIR)\lib"
+LIBPATH64 = /LIBPATH:"$(OPENCLDIR)\lib" /LIBPATH:"$(OPENCLDIR)\lib" /LIBPATH:"$(OPENCLDIR)\lib"
 
 # And since we can't do $(LIBPATH$(ARCH)) with nmake ...
 !IF "$(ARCH)" == "64"
