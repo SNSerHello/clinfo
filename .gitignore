@@ -1,3 +1,5 @@
 clinfo
 .*.swp
 *.o
+*.obj
+*.pdb

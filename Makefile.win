@@ -27,7 +27,7 @@ HDR =	src/error.h \
 	src/strbuf.h
 
 CFLAGS = /GL /Ox /W4 /Zi /I"$(OPENCLDIR)\include" /nologo
-LIBS = libOpenCL.lib
+LIBS = OpenCL.lib
 
 # TODO there's most likely a better way to do the multiarch
 # switching
