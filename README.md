@@ -7,6 +7,12 @@ $ %comspec% /k "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC
 $ make.cmd /D OPENCLDIR=G:\OpenCL-SDK-2022.5.18-win32
 ```
 
+##  参考
+
+- [Compiler Warning (level 1) C4819](https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-level-1-c4819?view=msvc-170)
+
+
+
 # What is this?
 
 clinfo is a simple command-line application that enumerates all possible

@@ -1,4 +1,4 @@
-/* Collect all available information on all available devices
+﻿/* Collect all available information on all available devices
  * on all available OpenCL platforms present in the system
  */
 
