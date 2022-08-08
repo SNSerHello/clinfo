@@ -7,6 +7,17 @@ $ %comspec% /k "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC
 $ make.cmd /D OPENCLDIR=G:\OpenCL-SDK-2022.5.18-win32
 ```
 
+**使用CMake编译**
+
+可以解决不同OpenCL SDK发布版本中的差异，比如说是`libOpenCL.lib`还是`OpenCL.lib`等问题。
+
+```bash
+$ cmake .. -G "Visual Studio 15 2017 Win64" -DCMAKE_INSTALL_PREFIX=../dist/clinfo -DOPENCL_SDK_ROOT=G:\OpenCL-SDK-2022.5.18-win32
+$ %comspec% /k "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
+$ msbuild /maxcpucount:4 /p:Configuration=Release /p:PreferredToolArchitecture=x64 ALL_BUILD.vcxproj -t:rebuild
+$ .\Release\clinfo.exe -l
+```
+
 ##  参考
 
 - [Compiler Warning (level 1) C4819](https://docs.microsoft.com/en-us/cpp/error-messages/compiler-warnings/compiler-warning-level-1-c4819?view=msvc-170)

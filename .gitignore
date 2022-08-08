@@ -3,3 +3,4 @@ clinfo
 *.o
 *.obj
 *.pdb
+build*
