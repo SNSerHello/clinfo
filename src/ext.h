@@ -190,7 +190,7 @@ typedef struct _cl_name_version {
 #define CL_PLATFORM_NUMERIC_VERSION_KHR			CL_PLATFORM_NUMERIC_VERSION
 #define CL_PLATFORM_EXTENSIONS_WITH_VERSION_KHR		CL_PLATFORM_EXTENSIONS_WITH_VERSION
 #define CL_DEVICE_NUMERIC_VERSION_KHR			CL_DEVICE_NUMERIC_VERSION
-#define CL_DEVICE_OPENCL_C_NUMERIC_VERSION_KHR		CL_DEVICE_OPENCL_C_NUMERIC_VERSION
+#define CL_DEVICE_OPENCL_C_NUMERIC_VERSION_KHR		0x105F
 #define CL_DEVICE_EXTENSIONS_WITH_VERSION_KHR		CL_DEVICE_EXTENSIONS_WITH_VERSION
 #define CL_DEVICE_ILS_WITH_VERSION_KHR			CL_DEVICE_ILS_WITH_VERSION
 #define CL_DEVICE_BUILT_IN_KERNELS_WITH_VERSION_KHR	CL_DEVICE_BUILT_IN_KERNELS_WITH_VERSION
@@ -228,6 +228,15 @@ typedef struct _cl_name_version {
 /* cl_khr_il_program */
 #define CL_DEVICE_IL_VERSION_KHR			0x105B
 
+/* cl_khr_command_buffer */
+#define CL_DEVICE_COMMAND_BUFFER_CAPABILITIES_KHR	0x12A9
+#define CL_DEVICE_COMMAND_BUFFER_REQUIRED_QUEUE_PROPERTIES_KHR	0x12AA
+typedef cl_bitfield         cl_device_command_buffer_capabilities_khr;
+
+/* cl_khr_command_buffer_mutable_dispatch */
+#define CL_DEVICE_MUTABLE_DISPATCH_CAPABILITIES_KHR	0x12B0
+typedef cl_bitfield         cl_mutable_dispatch_fields_khr;
+
 /* cl_khr_terminate_context */
 #define CL_DEVICE_TERMINATE_CAPABILITY_KHR_1x		0x200F
 #define CL_DEVICE_TERMINATE_CAPABILITY_KHR		0x2031
@@ -240,6 +249,24 @@ typedef cl_bitfield cl_device_terminate_capability_khr;
 
 /* cl_khr_subgroup_named_barrier */
 #define CL_DEVICE_MAX_NAMED_BARRIER_COUNT_KHR		0x2035
+
+/* cl_khr_semaphore */
+#define CL_PLATFORM_SEMAPHORE_TYPES_KHR			0x2036
+#define CL_DEVICE_SEMAPHORE_TYPES_KHR			0x204C
+typedef cl_uint cl_semaphore_type_khr;
+
+/* cl_khr_external_semaphore */
+#define CL_PLATFORM_SEMAPHORE_IMPORT_HANDLE_TYPES_KHR	0x2037
+#define CL_PLATFORM_SEMAPHORE_EXPORT_HANDLE_TYPES_KHR	0x2038
+#define CL_DEVICE_SEMAPHORE_IMPORT_HANDLE_TYPES_KHR	0x204D
+#define CL_DEVICE_SEMAPHORE_EXPORT_HANDLE_TYPES_KHR	0x204E
+typedef cl_uint cl_external_semaphore_handle_type_khr;
+
+/* cl_khr_external_memory */
+#define CL_PLATFORM_EXTERNAL_MEMORY_IMPORT_HANDLE_TYPES_KHR	0x2044
+#define CL_DEVICE_EXTERNAL_MEMORY_IMPORT_HANDLE_TYPES_KHR	0x204F
+typedef cl_uint cl_external_memory_handle_type_khr;
+
 
 /* cl_khr_pci_bus_info */
 typedef struct _cl_device_pci_bus_info_khr {
@@ -353,6 +380,13 @@ typedef cl_ulong  cl_device_partition_property_ext;
 #define CL_DEVICE_PLANAR_YUV_MAX_WIDTH_INTEL		0x417E
 #define CL_DEVICE_PLANAR_YUV_MAX_HEIGHT_INTEL		0x417F
 
+/* cl_intel_unified_shared_memory */
+#define CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL			0x4190
+#define CL_DEVICE_DEVICE_MEM_CAPABILITIES_INTEL			0x4191
+#define CL_DEVICE_SINGLE_DEVICE_SHARED_MEM_CAPABILITIES_INTEL	0x4192
+#define CL_DEVICE_CROSS_DEVICE_SHARED_MEM_CAPABILITIES_INTEL	0x4193
+#define CL_DEVICE_SHARED_SYSTEM_MEM_CAPABILITIES_INTEL		0x4194
+
 /* cl_qcom_ext_host_ptr */
 #define CL_DEVICE_EXT_MEM_PADDING_IN_BYTES_QCOM		0x40A0
 #define CL_DEVICE_PAGE_SIZE_QCOM			0x40A1
@@ -388,6 +422,19 @@ typedef cl_bitfield cl_device_controlled_termination_capabilities_arm;
 /* cl_intel_required_subgroup_size */
 #define CL_DEVICE_SUB_GROUP_SIZES_INTEL			0x4108
 
+/* cl_intel_command_queue_families */
+#define CL_DEVICE_QUEUE_FAMILY_PROPERTIES_INTEL		0x418B
+
+typedef cl_bitfield         cl_command_queue_capabilities_intel;
+
+#define CL_QUEUE_FAMILY_MAX_NAME_SIZE_INTEL                 64
+typedef struct _cl_queue_family_properties_intel {
+    cl_command_queue_properties properties;
+    cl_command_queue_capabilities_intel capabilities;
+    cl_uint count;
+    char name[CL_QUEUE_FAMILY_MAX_NAME_SIZE_INTEL];
+} cl_queue_family_properties_intel;
+
 /* cl_arm_job_slot_selection */
 #define CL_DEVICE_JOB_SLOTS_ARM				0x41E0
 
@@ -402,8 +449,26 @@ typedef cl_bitfield cl_device_scheduling_controls_capabilities_arm;
 #define CL_DEVICE_SCHEDULING_WORKGROUP_BATCH_SIZE_MODIFIER_ARM	(1 << 2)
 #define CL_DEVICE_SCHEDULING_DEFERRED_FLUSH_ARM			(1 << 3)
 #define CL_DEVICE_SCHEDULING_REGISTER_ALLOCATION_ARM		(1 << 4)
+#define CL_DEVICE_SCHEDULING_WARP_THROTTLING_ARM		(1 << 5)
+#define CL_DEVICE_SCHEDULING_COMPUTE_UNIT_BATCH_QUEUE_SIZE_ARM	(1 << 6)
 
+#define CL_DEVICE_MAX_WARP_COUNT_ARM			0x41EA
 #define CL_DEVICE_SUPPORTED_REGISTER_ALLOCATIONS_ARM	0x41EB
+
+/* cl_intel_device_attribute_query */
+
+typedef cl_bitfield cl_device_feature_capabilities_intel;
+
+#define CL_DEVICE_FEATURE_FLAG_DP4A_INTEL	(1 << 0)
+#define CL_DEVICE_FEATURE_FLAG_DPAS_INTEL	(1 << 1)
+
+#define CL_DEVICE_IP_VERSION_INTEL			0x4250
+#define CL_DEVICE_ID_INTEL				0x4251
+#define CL_DEVICE_NUM_SLICES_INTEL			0x4252
+#define CL_DEVICE_NUM_SUB_SLICES_PER_SLICE_INTEL	0x4253
+#define CL_DEVICE_NUM_EUS_PER_SUB_SLICE_INTEL		0x4254
+#define CL_DEVICE_NUM_THREADS_PER_EU_INTEL		0x4255
+#define CL_DEVICE_FEATURE_CAPABILITIES_INTEL		0x4256
 
 /* clGeICDLoaderInfoOCLICD */
 typedef enum {

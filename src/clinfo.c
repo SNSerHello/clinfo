@@ -60,6 +60,9 @@ struct platform_info_checks {
 	cl_bool has_khr_icd;
 	cl_bool has_amd_object_metadata;
 	cl_bool has_extended_versioning;
+	cl_bool has_external_memory;
+	cl_bool has_semaphore;
+	cl_bool has_external_semaphore;
 };
 
 struct platform_list {
@@ -118,17 +121,21 @@ void plist_devs_reserve(struct platform_list *plist, cl_uint amount)
 }
 
 
-void
-alloc_plist(struct platform_list *plist)
+cl_uint
+alloc_plist(struct platform_list *plist, const struct opt_out *output)
 {
-	ALLOC(plist->platform, plist->num_platforms, "platform IDs");
-	ALLOC(plist->dev_offset, plist->num_platforms, "platform device list offset");
+	cl_uint num_platforms = plist->num_platforms;
+	if (output->null_platform)
+		num_platforms += 1;
+	ALLOC(plist->platform, num_platforms, "platform IDs");
+	ALLOC(plist->dev_offset, num_platforms, "platform device list offset");
 	/* The actual sizing for this will change as we gather platform info,
 	 * but assume at least one device per platform
 	 */
-	plist_devs_reserve(plist, plist->num_platforms);
-	ALLOC(plist->pdata, plist->num_platforms, "platform data");
-	ALLOC(plist->platform_checks, plist->num_platforms, "platform checks data");
+	plist_devs_reserve(plist, num_platforms);
+	ALLOC(plist->pdata, num_platforms, "platform data");
+	ALLOC(plist->platform_checks, num_platforms, "platform checks data");
+	return num_platforms;
 }
 void
 free_plist(struct platform_list *plist)
@@ -247,6 +254,36 @@ static const char *device_enqueue_cap_raw_str[] = {
 };
 const size_t device_enqueue_cap_count = ARRAY_SIZE(atomic_cap_str);
 
+static const char *command_buffer_str[] = {
+	"kernel printf", "device side enqueue", "simultaneous use", "out of order",
+};
+
+static const char *command_buffer_raw_str[] = {
+	"CL_COMMAND_BUFFER_CAPABILITY_KERNEL_PRINTF_KHR",
+	"CL_COMMAND_BUFFER_CAPABILITY_DEVICE_SIDE_ENQUEUE_KHR",
+	"CL_COMMAND_BUFFER_CAPABILITY_SIMULTANEOUS_USE_KHR",
+	"CL_COMMAND_BUFFER_CAPABILITY_OUT_OF_ORDER_KHR",
+};
+
+const size_t command_buffer_count = ARRAY_SIZE(command_buffer_str);
+
+static const char *mutable_dispatch_str[] = {
+	"Global Offset",
+	"Local Offset",
+	"Local Size",
+	"Arguments",
+	"Exec Info",
+};
+
+static const char *mutable_dispatch_raw_str[] = {
+	"CL_MUTABLE_DISPATCH_GLOBAL_OFFSET_KHR",
+	"CL_MUTABLE_DISPATCH_GLOBAL_SIZE_KHR",
+	"CL_MUTABLE_DISPATCH_LOCAL_SIZE_KHR",
+	"CL_MUTABLE_DISPATCH_ARGUMENTS_KHR",
+	"CL_MUTABLE_DISPATCH_EXEC_INFO_KHR",
+};
+
+const size_t mutable_dispatch_count = ARRAY_SIZE(mutable_dispatch_str);
 
 static const char numa[] = "NUMA";
 static const char l1cache[] = "L1 cache";
@@ -342,12 +379,30 @@ static const char* svm_cap_raw_str[] = {
 
 const size_t svm_cap_count = ARRAY_SIZE(svm_cap_str);
 
+static const char * intel_usm_cap_str[] = {
+	"USM access",
+	"USM atomic access",
+	"USM concurrent access",
+	"USM concurrent atomic access"
+};
+
+static const char * intel_usm_cap_raw_str[] = {
+	"CL_UNIFIED_SHARED_MEMORY_ACCESS_INTEL",
+	"CL_UNIFIED_SHARED_MEMORY_ATOMIC_ACCESS_INTEL",
+	"CL_UNIFIED_SHARED_MEMORY_CONCURRENT_ACCESS_INTEL",
+	"CL_UNIFIED_SHARED_MEMORY_CONCURRENT_ATOMIC_ACCESS_INTEL",
+};
+
+const size_t intel_usm_cap_count = ARRAY_SIZE(intel_usm_cap_str);
+
 static const char* arm_scheduling_controls_str[] = {
 	"Kernel batching",
 	"Work-group batch size",
 	"Work-group batch size modifier",
 	"Deferred flush",
 	"Register allocation",
+	"Warp throttling",
+	"Compute unit batch queue size",
 };
 
 static const char* arm_scheduling_controls_raw_str[] = {
@@ -356,10 +411,62 @@ static const char* arm_scheduling_controls_raw_str[] = {
 	"CL_DEVICE_SCHEDULING_WORKGROUP_BATCH_SIZE_MODIFIER_ARM",
 	"CL_DEVICE_SCHEDULING_DEFERRED_FLUSH_ARM",
 	"CL_DEVICE_SCHEDULING_REGISTER_ALLOCATION_ARM",
+	"CL_DEVICE_SCHEDULING_WARP_THROTTLING_ARM",
+	"CL_DEVICE_SCHEDULING_COMPUTE_UNIT_BATCH_QUEUE_SIZE_ARM",
 };
 
 const size_t arm_scheduling_controls_count = ARRAY_SIZE(arm_scheduling_controls_str);
 
+static const char* ext_mem_handle_str[] = {
+	"Opaque FD",
+	"Opaqe Win32",
+	"Opaque Win32 KMT",
+	"D3D11 Texture",
+	"D3D11 Texture KMT",
+	"D3D12 Heap",
+	"D3D12 Resource",
+	"DMA buffer"
+};
+
+static const char* ext_mem_handle_raw_str[] = {
+	"CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_FD_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_WIN32_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_OPAQUE_WIN32_KMT_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_D3D11_TEXTURE_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_D3D11_TEXTURE_KMT_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_D3D12_HEAP_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_D3D12_RESOURCE_KHR",
+	"CL_EXTERNAL_MEMORY_HANDLE_DMA_BUF_KHR",
+};
+
+const size_t ext_mem_handle_count = ARRAY_SIZE(ext_mem_handle_str);
+const size_t ext_mem_handle_offset = 0x2060;
+
+static const char* semaphore_type_str[] = {
+	"Binary"
+};
+static const char* semaphore_type_raw_str[] = {
+	"CL_SEMAPHORE_TYPE_BINARY_KHR"
+};
+const size_t semaphore_type_count = ARRAY_SIZE(semaphore_type_str);
+const size_t semaphore_type_offset = 1;
+
+static const char* semaphore_handle_str[] = {
+	"Opaque FD",
+	"Opaque Win32",
+	"Opaque Win32 KMT",
+	"Sync FD",
+	"D3D12 Fence"
+};
+static const char* semaphore_handle_raw_str[] = {
+	"CL_SEMAPHORE_HANDLE_OPAQUE_FD_KHR",
+	"CL_SEMAPHORE_HANDLE_OPAQUE_WIN32_KHR",
+	"CL_SEMAPHORE_HANDLE_OPAQUE_WIN32_KMT_KHR",
+	"CL_SEMAPHORE_HANDLE_SYNC_FD_KHR",
+	"CL_SEMAPHORE_HANDLE_D3D12_FENCE_KHR",
+};
+const size_t semaphore_handle_count = ARRAY_SIZE(semaphore_handle_str);
+const size_t semaphore_handle_offset = 0x2055;
 
 /* SI suffixes for memory sizes. Note that in OpenCL most of them are
  * passed via a cl_ulong, which at most can mode 16 EiB, but hey,
@@ -384,6 +491,74 @@ static const char* queue_prop_raw_str[] = {
 
 const size_t queue_prop_count = ARRAY_SIZE(queue_prop_str);
 
+static const char* intel_queue_cap_str[] = {
+	"create single-queue events",
+	"create cross-queue events",
+	"single-queue wait list",
+	"cross-queue wait list",
+	"unknown (bit 4)",
+	"unknown (bit 5)",
+	"unknown (bit 6)",
+	"unknown (bit 7)",
+	"transfer buffer",
+	"transfer buffer rect",
+	"map buffer",
+	"fill buffer",
+	"transfer image",
+	"map image",
+	"fill image",
+	"transfer buffer to image",
+	"transfer image to buffer",
+	"unknown (bit 17)",
+	"unknown (bit 18)",
+	"unknown (bit 19)",
+	"unknown (bit 20)",
+	"unknown (bit 21)",
+	"unknown (bit 22)",
+	"unknown (bit 23)",
+	"marker enqueue",
+	"barrier enqueue",
+	"kernel enqueue",
+	"unknown (bit 27)",
+	"unknown (bit 28)",
+	"no sync operations",
+};
+
+static const char* intel_queue_cap_raw_str[] = {
+	"CL_QUEUE_CAPABILITY_CREATE_SINGLE_QUEUE_EVENTS_INTEL",
+	"CL_QUEUE_CAPABILITY_CREATE_CROSS_QUEUE_EVENTS_INTEL",
+	"CL_QUEUE_CAPABILITY_SINGLE_QUEUE_EVENT_WAIT_LIST_INTEL",
+	"CL_QUEUE_CAPABILITY_CROSS_QUEUE_EVENT_WAIT_LIST_INTEL",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_4",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_5",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_6",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_7",
+	"CL_QUEUE_CAPABILITY_TRANSFER_BUFFER_INTEL",
+	"CL_QUEUE_CAPABILITY_TRANSFER_BUFFER_RECT_INTEL",
+	"CL_QUEUE_CAPABILITY_MAP_BUFFER_INTEL",
+	"CL_QUEUE_CAPABILITY_FILL_BUFFER_INTEL",
+	"CL_QUEUE_CAPABILITY_TRANSFER_IMAGE_INTEL",
+	"CL_QUEUE_CAPABILITY_MAP_IMAGE_INTEL",
+	"CL_QUEUE_CAPABILITY_FILL_IMAGE_INTEL",
+	"CL_QUEUE_CAPABILITY_TRANSFER_BUFFER_IMAGE_INTEL",
+	"CL_QUEUE_CAPABILITY_TRANSFER_IMAGE_BUFFER_INTEL",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_17",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_18",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_19",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_20",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_21",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_22",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_23",
+	"CL_QUEUE_CAPABILITY_MARKER_INTEL",
+	"CL_QUEUE_CAPABILITY_BARRIER_INTEL",
+	"CL_QUEUE_CAPABILITY_KERNEL_INTEL",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_27",
+	"CL_QUEUE_CAPABILITY_UNKNOWN_28",
+	"CL_QUEUE_NO_SYNC_OPERATIONS_INTEL",
+};
+
+const size_t intel_queue_cap_count = ARRAY_SIZE(intel_queue_cap_str);
+
 static const char* execap_str[] = { "Run OpenCL kernels", "Run native kernels" };
 static const char* execap_raw_str[] = {
 	"CL_EXEC_KERNEL",
@@ -391,6 +566,11 @@ static const char* execap_raw_str[] = {
 };
 
 const size_t execap_count = ARRAY_SIZE(execap_str);
+
+static const char* intel_features_str[] = { "DP4A", "DPAS" };
+static const char* intel_features_raw_str[] = { "CL_DEVICE_FEATURE_FLAG_DP4A_INTEL", "CL_DEVICE_FEATURE_FLAG_DPAS_INTEL" };
+
+const size_t intel_features_count = ARRAY_SIZE(intel_features_str);
 
 static const char* sources[] = {
 	"#define GWO(type) global type* restrict\n",
@@ -624,6 +804,53 @@ void strbuf_name_version(const char *what, struct _strbuf *str, const cl_name_ve
 		strbuf_append_str(what, str, " }");
 }
 
+
+void strbuf_named_uint(const char *what, struct _strbuf *str, const cl_uint *ext, size_t num_exts, const struct opt_out *output,
+	const char* const* human_str, const char* const* raw_str, const size_t count, const size_t offset)
+{
+	const char *quote = output->json ? "\"" : "";
+	const char * const * name_str = output->mode == CLINFO_HUMAN ? human_str : raw_str;
+	set_common_separator(output);
+	if (output->json)
+		strbuf_append_str_len(what, str, "[ ", 2);
+
+	for (size_t cursor = 0; cursor < num_exts; ++cursor) {
+		/* add separator for values past the first */
+		if (cursor > 0) strbuf_append_str(what, str, sep);
+
+		cl_uint val = ext[cursor];
+		cl_bool known = (val >= offset && val < offset + count);
+		if (known) 
+			strbuf_append(what, str, "%s%s%s", quote, name_str[val - offset], quote);
+		else
+			strbuf_append(what, str, "%s%#" PRIx32 "%s", quote, val, quote);
+	}
+	if (output->json)
+		strbuf_append_str_len(what, str, " ]", 2);
+}
+
+void strbuf_ext_mem(const char *what, struct _strbuf *str, const cl_external_memory_handle_type_khr *ext, size_t num_exts,
+	const struct opt_out *output)
+{
+	strbuf_named_uint(what, str, ext, num_exts, output,
+		ext_mem_handle_str, ext_mem_handle_raw_str, ext_mem_handle_count, ext_mem_handle_offset);
+}
+
+void strbuf_semaphore_type(const char *what, struct _strbuf *str, const cl_semaphore_type_khr *ext, size_t num_exts,
+	const struct opt_out *output)
+{
+	strbuf_named_uint(what, str, ext, num_exts, output,
+		semaphore_type_str, semaphore_type_raw_str, semaphore_type_count, semaphore_type_offset);
+}
+
+void strbuf_ext_semaphore_handle(const char *what, struct _strbuf *str, const cl_external_semaphore_handle_type_khr *ext, size_t num_exts,
+	const struct opt_out *output)
+{
+	strbuf_named_uint(what, str, ext, num_exts, output,
+		semaphore_handle_str, semaphore_handle_raw_str, semaphore_handle_count, semaphore_handle_offset);
+}
+
+
 /* print strbuf, prefixed by pname, skipping leading whitespace if skip is nonzero,
  * affixing cur_sfx */
 static inline
@@ -735,8 +962,77 @@ platform_info_ext_version(struct platform_info_ret *ret,
 			loc, "get %s");
 	}
 	if (!ret->err) {
-		size_t num_exts = nusz / sizeof(cl_name_version);
+		size_t num_exts = nusz / sizeof(*ext);
 		strbuf_name_version(loc->pname, &ret->str, ext, num_exts, output);
+	}
+	free(ext);
+}
+
+void
+platform_info_ext_mem(struct platform_info_ret *ret,
+	const struct info_loc *loc, const struct platform_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_external_memory_handle_type_khr *ext = NULL;
+	size_t nusz = 0;
+	ret->err = REPORT_ERROR_LOC(ret,
+		clGetPlatformInfo(loc->plat, loc->param.plat, 0, NULL, &nusz),
+		loc, "get %s size");
+	if (!ret->err) {
+		REALLOC(ext, nusz, loc->sname);
+		ret->err = REPORT_ERROR_LOC(ret,
+			clGetPlatformInfo(loc->plat, loc->param.plat, nusz, ext, NULL),
+			loc, "get %s");
+	}
+	if (!ret->err) {
+		size_t num_exts = nusz / sizeof(*ext);
+		strbuf_ext_mem(loc->pname, &ret->str, ext, num_exts, output);
+	}
+	free(ext);
+}
+
+void
+platform_info_semaphore_types(struct platform_info_ret *ret,
+	const struct info_loc *loc, const struct platform_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_semaphore_type_khr *ext = NULL;
+	size_t nusz = 0;
+	ret->err = REPORT_ERROR_LOC(ret,
+		clGetPlatformInfo(loc->plat, loc->param.plat, 0, NULL, &nusz),
+		loc, "get %s size");
+	if (!ret->err) {
+		REALLOC(ext, nusz, loc->sname);
+		ret->err = REPORT_ERROR_LOC(ret,
+			clGetPlatformInfo(loc->plat, loc->param.plat, nusz, ext, NULL),
+			loc, "get %s");
+	}
+	if (!ret->err) {
+		size_t num_exts = nusz / sizeof(*ext);
+		strbuf_semaphore_type(loc->pname, &ret->str, ext, num_exts, output);
+	}
+	free(ext);
+}
+
+void
+platform_info_ext_semaphore_handles(struct platform_info_ret *ret,
+	const struct info_loc *loc, const struct platform_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_external_semaphore_handle_type_khr *ext = NULL;
+	size_t nusz = 0;
+	ret->err = REPORT_ERROR_LOC(ret,
+		clGetPlatformInfo(loc->plat, loc->param.plat, 0, NULL, &nusz),
+		loc, "get %s size");
+	if (!ret->err) {
+		REALLOC(ext, nusz, loc->sname);
+		ret->err = REPORT_ERROR_LOC(ret,
+			clGetPlatformInfo(loc->plat, loc->param.plat, nusz, ext, NULL),
+			loc, "get %s");
+	}
+	if (!ret->err) {
+		size_t num_exts = nusz / sizeof(*ext);
+		strbuf_ext_semaphore_handle(loc->pname, &ret->str, ext, num_exts, output);
 	}
 	free(ext);
 }
@@ -789,6 +1085,20 @@ cl_bool plat_has_ext_ver(const struct platform_info_checks *chk)
 	return plat_is_30(chk) || chk->has_extended_versioning;
 }
 
+cl_bool plat_has_ext_mem(const struct platform_info_checks *chk)
+{
+	return chk->has_external_memory;
+}
+
+cl_bool plat_has_semaphore(const struct platform_info_checks *chk)
+{
+	return chk->has_semaphore;
+}
+
+cl_bool plat_has_external_semaphore(const struct platform_info_checks *chk)
+{
+	return chk->has_external_semaphore;
+}
 
 #define PINFO_COND(symbol, name, sfx, typ, funcptr) { symbol, #symbol, "Platform " name, sfx, &platform_info_##typ, &funcptr }
 #define PINFO(symbol, name, sfx, typ) { symbol, #symbol, "Platform " name, sfx, &platform_info_##typ, NULL }
@@ -802,7 +1112,12 @@ struct platform_info_traits pinfo_traits[] = {
 	PINFO_COND(CL_PLATFORM_NUMERIC_VERSION, "Numeric Version", NULL, version, plat_has_ext_ver),
 	PINFO_COND(CL_PLATFORM_ICD_SUFFIX_KHR, "Extensions function suffix", NULL, str, khr_icd_p),
 	PINFO_COND(CL_PLATFORM_MAX_KEYS_AMD, "Max metadata object keys (AMD)", NULL, sz, plat_has_amd_object_metadata),
-	PINFO_COND(CL_PLATFORM_HOST_TIMER_RESOLUTION, "Host timer resolution", "ns", ulong, plat_is_21)
+	PINFO_COND(CL_PLATFORM_HOST_TIMER_RESOLUTION, "Host timer resolution", "ns", ulong, plat_is_21),
+	PINFO_COND(CL_PLATFORM_EXTERNAL_MEMORY_IMPORT_HANDLE_TYPES_KHR, "External memory handle types", NULL, ext_mem, plat_has_ext_mem),
+	PINFO_COND(CL_PLATFORM_SEMAPHORE_TYPES_KHR, "Semaphore types", NULL, semaphore_types, plat_has_semaphore),
+	PINFO_COND(CL_PLATFORM_SEMAPHORE_IMPORT_HANDLE_TYPES_KHR, "External semaphore import types", NULL, ext_semaphore_handles, plat_has_external_semaphore),
+	PINFO_COND(CL_PLATFORM_SEMAPHORE_EXPORT_HANDLE_TYPES_KHR, "External semaphore export types", NULL, ext_semaphore_handles, plat_has_external_semaphore),
+
 };
 
 /* Collect (and optionally show) information on a specific platform,
@@ -883,6 +1198,8 @@ gatherPlatformInfo(struct platform_list *plist, cl_uint p, const struct opt_out 
 			 * and memcpy is possibly more optimized */
 			memcpy(pdata->pname, ret.str.buf, len);
 			pdata->pname[len] = '\0';
+			/* We print the platform name here in the JSON + brief case */
+			if (output->json && output->brief) json_stringify(pdata->pname);
 			break;
 		case CL_PLATFORM_VERSION:
 			/* compute numeric value for OpenCL version */
@@ -891,6 +1208,9 @@ gatherPlatformInfo(struct platform_list *plist, cl_uint p, const struct opt_out 
 		case CL_PLATFORM_EXTENSIONS:
 			pinfo_checks->has_khr_icd = !!strstr(ret.str.buf, "cl_khr_icd");
 			pinfo_checks->has_amd_object_metadata = !!strstr(ret.str.buf, "cl_amd_object_metadata");
+			pinfo_checks->has_external_memory = !!strstr(ret.str.buf, "cl_khr_external_memory");
+			pinfo_checks->has_semaphore = !!strstr(ret.str.buf, "cl_khr_semaphore");
+			pinfo_checks->has_external_semaphore = !!strstr(ret.str.buf, "cl_khr_external_semaphore");
 			pdata->has_amd_offline = !!strstr(ret.str.buf, "cl_amd_offline_devices");
 			break;
 		case CL_PLATFORM_ICD_SUFFIX_KHR:
@@ -956,12 +1276,18 @@ struct device_info_checks {
 	cl_bool image_support;
 	cl_bool compiler_available;
 	cl_bool arm_register_alloc_support;
+	cl_bool arm_warp_count_support;
 	char has_half[12];
 	char has_double[24];
 	char has_nv[29];
 	char has_amd[30];
+	char has_intel[32];
 	char has_amd_svm[11];
 	char has_arm_svm[29];
+	char has_intel_usm[31];
+	char has_external_memory[23];
+	char has_semaphore[17];
+	char has_external_semaphore[26];
 	char has_arm_core_id[15];
 	char has_arm_job_slots[26];
 	char has_arm_scheduling_controls[27];
@@ -969,6 +1295,7 @@ struct device_info_checks {
 	char has_atomic_counters[26];
 	char has_image2d_buffer[27];
 	char has_il_program[18];
+	char has_intel_queue_families[32];
 	char has_intel_local_thread[30];
 	char has_intel_AME[36];
 	char has_intel_AVC_ME[43];
@@ -981,6 +1308,8 @@ struct device_info_checks {
 	char has_qcom_ext_host_ptr[21];
 	char has_simultaneous_sharing[30];
 	char has_subgroup_named_barrier[30];
+	char has_command_buffer[25];
+	char has_mutable_dispatch[27];
 	char has_terminate_context[25];
 	char has_terminate_arm[37];
 	char has_extended_versioning[27];
@@ -1001,12 +1330,18 @@ DEFINE_EXT_CHECK(nv)
 DEFINE_EXT_CHECK(amd)
 DEFINE_EXT_CHECK(amd_svm)
 DEFINE_EXT_CHECK(arm_svm)
+DEFINE_EXT_CHECK(intel_usm)
+DEFINE_EXT_CHECK(external_memory)
+DEFINE_EXT_CHECK(semaphore)
+DEFINE_EXT_CHECK(external_semaphore)
 DEFINE_EXT_CHECK(arm_core_id)
 DEFINE_EXT_CHECK(arm_job_slots)
 DEFINE_EXT_CHECK(arm_scheduling_controls)
 DEFINE_EXT_CHECK(fission)
 DEFINE_EXT_CHECK(atomic_counters)
 DEFINE_EXT_CHECK(il_program)
+DEFINE_EXT_CHECK(intel)
+DEFINE_EXT_CHECK(intel_queue_families)
 DEFINE_EXT_CHECK(intel_local_thread)
 DEFINE_EXT_CHECK(intel_AME)
 DEFINE_EXT_CHECK(intel_AVC_ME)
@@ -1019,6 +1354,8 @@ DEFINE_EXT_CHECK(spir)
 DEFINE_EXT_CHECK(qcom_ext_host_ptr)
 DEFINE_EXT_CHECK(simultaneous_sharing)
 DEFINE_EXT_CHECK(subgroup_named_barrier)
+DEFINE_EXT_CHECK(command_buffer)
+DEFINE_EXT_CHECK(mutable_dispatch)
 DEFINE_EXT_CHECK(terminate_context)
 DEFINE_EXT_CHECK(terminate_arm)
 DEFINE_EXT_CHECK(extended_versioning)
@@ -1094,6 +1431,12 @@ cl_bool dev_has_amd_v4(const struct device_info_checks *chk)
 	return dev_is_gpu(chk) && dev_has_amd(chk) && plat_is_20(chk->pinfo_checks);
 }
 
+/* Device supports cl_intel_device_attribute_query and is a GPU */
+cl_bool dev_is_gpu_intel(const struct device_info_checks *chk)
+{
+	return dev_is_gpu(chk) && dev_has_intel(chk);
+}
+
 /* Device supports cl_arm_core_id v2 */
 cl_bool dev_has_arm_core_id_v2(const struct device_info_checks *chk)
 {
@@ -1110,6 +1453,12 @@ cl_bool dev_has_arm_core_id_v2(const struct device_info_checks *chk)
 cl_bool dev_has_arm_register_alloc(const struct device_info_checks *chk)
 {
 	return dev_has_arm_scheduling_controls(chk) && chk->arm_register_alloc_support;
+}
+
+/* Device supports warp  */
+cl_bool dev_has_arm_warp_count_support(const struct device_info_checks *chk)
+{
+	return dev_has_arm_scheduling_controls(chk) && chk->arm_warp_count_support;
 }
 
 cl_bool dev_has_svm(const struct device_info_checks *chk)
@@ -1195,8 +1544,13 @@ void identify_device_extensions(const char *extensions, struct device_info_check
 		CHECK_EXT(double, cl_APPLE_fp64_basic_ops);
 	CHECK_EXT(nv, cl_nv_device_attribute_query);
 	CHECK_EXT(amd, cl_amd_device_attribute_query);
+	CHECK_EXT(intel, cl_intel_device_attribute_query);
 	CHECK_EXT(amd_svm, cl_amd_svm);
 	CHECK_EXT(arm_svm, cl_arm_shared_virtual_memory);
+	CHECK_EXT(intel_usm, cl_intel_unified_shared_memory);
+	CHECK_EXT(external_memory, cl_khr_external_memory);
+	CHECK_EXT(semaphore, cl_khr_semaphore);
+	CHECK_EXT(external_semaphore, cl_khr_external_semaphore);
 	CHECK_EXT(arm_core_id, cl_arm_core_id);
 	CHECK_EXT(arm_job_slots, cl_arm_job_slot_selection);
 	CHECK_EXT(arm_scheduling_controls, cl_arm_scheduling_controls);
@@ -1206,6 +1560,7 @@ void identify_device_extensions(const char *extensions, struct device_info_check
 		CHECK_EXT(atomic_counters, cl_ext_atomic_counters_32);
 	CHECK_EXT(image2d_buffer, cl_khr_image2d_from_buffer);
 	CHECK_EXT(il_program, cl_khr_il_program);
+	CHECK_EXT(intel_queue_families, cl_intel_command_queue_families);
 	CHECK_EXT(intel_local_thread, cl_intel_exec_by_local_thread);
 	CHECK_EXT(intel_AME, cl_intel_advanced_motion_estimation);
 	CHECK_EXT(intel_AVC_ME, cl_intel_device_side_avc_motion_estimation);
@@ -1217,6 +1572,8 @@ void identify_device_extensions(const char *extensions, struct device_info_check
 	CHECK_EXT(qcom_ext_host_ptr, cl_qcom_ext_host_ptr);
 	CHECK_EXT(simultaneous_sharing, cl_intel_simultaneous_sharing);
 	CHECK_EXT(subgroup_named_barrier, cl_khr_subgroup_named_barrier);
+	CHECK_EXT(command_buffer, cl_khr_command_buffer);
+	CHECK_EXT(mutable_dispatch, cl_khr_mutable_dispatch);
 	CHECK_EXT(terminate_context, cl_khr_terminate_context);
 	CHECK_EXT(terminate_arm, cl_arm_controlled_kernel_termination);
 	CHECK_EXT(extended_versioning, cl_khr_extended_versioning);
@@ -1369,6 +1726,48 @@ device_info_ext_version(struct device_info_ret *ret,
 	GET_VAL_ARRAY(ret, loc);
 	if (!ret->err) {
 		strbuf_name_version(loc->pname, &ret->str, val, numval, output);
+	}
+	free(val);
+}
+
+void
+device_info_ext_mem(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_external_memory_handle_type_khr *val = NULL;
+	size_t szval = 0, numval = 0;
+	GET_VAL_ARRAY(ret, loc);
+	if (!ret->err) {
+		strbuf_ext_mem(loc->pname, &ret->str, val, numval, output);
+	}
+	free(val);
+}
+
+void
+device_info_semaphore_types(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_semaphore_type_khr *val = NULL;
+	size_t szval = 0, numval = 0;
+	GET_VAL_ARRAY(ret, loc);
+	if (!ret->err) {
+		strbuf_semaphore_type(loc->pname, &ret->str, val, numval, output);
+	}
+	free(val);
+}
+
+void
+device_info_ext_semaphore_handles(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_external_semaphore_handle_type_khr *val = NULL;
+	size_t szval = 0, numval = 0;
+	GET_VAL_ARRAY(ret, loc);
+	if (!ret->err) {
+		strbuf_ext_semaphore_handle(loc->pname, &ret->str, val, numval, output);
 	}
 	free(val);
 }
@@ -1682,14 +2081,10 @@ device_info_img_sz_3d(struct device_info_ret *ret,
 	ret->value.u64v.s[2] = depth;
 }
 
-void
-device_info_bitfield(struct device_info_ret *ret,
-	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
-	const struct opt_out *output,
-	const cl_bitfield bits,
-	const size_t bit_str_count, /* number of entries in bit_str */
-	const char * const * bit_str, /* array of strings describing the bits */
-	const char * bits_name) /* JSON name for this bitfield */
+void strbuf_bitfield(const char *what, struct _strbuf *str,
+	cl_bitfield bits, const char *bits_name,
+	const char * const *bit_str, size_t bit_str_count,
+	const struct opt_out *output)
 {
 	const char *quote = output->json ? "\"" : "";
 	/* number of matches so far, for separator placement */
@@ -1702,14 +2097,14 @@ device_info_bitfield(struct device_info_ret *ret,
 	set_common_separator(output);
 
 	if (output->json)
-		strbuf_append(loc->pname, &ret->str,
+		strbuf_append(what, str,
 			"{ \"raw\" : %" PRIu64 ", \"%s\" : [ ",
 			bits, bits_name);
 
 	if (bits) {
 		for (i = 0; i < bit_str_count; ++i) {
 			if (bits & (1UL << i)) {
-				strbuf_append(loc->pname, &ret->str, "%s%s%s%s",
+				strbuf_append(what, str, "%s%s%s%s",
 					(count > 0 ? sep : ""),
 					quote, bit_str[i], quote);
 				++count;
@@ -1720,13 +2115,26 @@ device_info_bitfield(struct device_info_ret *ret,
 		known_mask = ((cl_bitfield)(1) << bit_str_count) - 1;
 		extra = bits & ~known_mask;
 		if (extra) {
-			strbuf_append(loc->pname, &ret->str, "%s%s%#" PRIx64 "%s",
+			strbuf_append(what, str, "%s%s%#" PRIx64 "%s",
 				(count > 0 ? sep : ""), quote, extra, quote);
 		}
 	}
 
 	if (output->json)
-		strbuf_append_str(loc->pname, &ret->str, " ] }");
+		strbuf_append_str(what, str, " ] }");
+}
+
+
+void
+device_info_bitfield(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output,
+	const cl_bitfield bits,
+	const size_t bit_str_count, /* number of entries in bit_str */
+	const char * const * bit_str, /* array of strings describing the bits */
+	const char * bits_name) /* JSON name for this bitfield */
+{
+	strbuf_bitfield(loc->pname, &ret->str, bits, bits_name, bit_str, bit_str_count, output);
 }
 
 
@@ -2081,6 +2489,19 @@ device_info_gfxip_amd(struct device_info_ret *ret,
 	ret->value.u32v.s[1] = minor;
 }
 
+/* Intel feature capabilities */
+void
+device_info_intel_features(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	GET_VAL(ret, loc, bits);
+	device_info_bitfield(ret, loc, chk, output, ret->value.bits, intel_features_count,
+		(output->mode == CLINFO_HUMAN ? intel_features_str : intel_features_raw_str), 
+		"features_intel");
+}
+
+
 
 /* Device Partition, CLINFO_HUMAN header */
 void
@@ -2405,7 +2826,111 @@ device_info_qprop(struct device_info_ret *ret,
 	}
 }
 
-/* Execution capbilities */
+void
+device_info_command_buffer_caps(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks *chk,
+	const struct opt_out *output)
+{
+	GET_VAL(ret, loc, cmdbufcap);
+	if (!ret->err) {
+		device_info_bitfield(ret, loc, chk, output, ret->value.cmdbufcap,
+			command_buffer_count,
+			(output->mode == CLINFO_RAW ? command_buffer_raw_str : command_buffer_str),
+			"capabilities");
+	}
+}
+
+void
+device_info_mutable_dispatch_caps(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks *chk,
+	const struct opt_out *output)
+{
+	GET_VAL(ret, loc, cmdbufcap);
+	if (!ret->err) {
+		device_info_bitfield(ret, loc, chk, output, ret->value.cmdbufcap,
+			mutable_dispatch_count,
+			(output->mode == CLINFO_RAW ? mutable_dispatch_raw_str : mutable_dispatch_str),
+			"capabilities");
+	}
+}
+
+void
+device_info_intel_usm_cap(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks *chk,
+	const struct opt_out *output)
+{
+	GET_VAL(ret, loc, svmcap);
+	if (!ret->err) {
+		device_info_bitfield(ret, loc, chk, output, ret->value.svmcap,
+			intel_usm_cap_count,
+			(output->mode == CLINFO_RAW ? intel_usm_cap_raw_str : intel_usm_cap_str),
+			"capabilities");
+	}
+}
+
+/* Device queue family properties */
+void
+strbuf_intel_queue_family(const char *what, struct _strbuf *str, const cl_queue_family_properties_intel *fams, size_t num_fams,
+	const struct opt_out *output)
+{
+	realloc_strbuf(str, num_fams*(CL_QUEUE_FAMILY_MAX_NAME_SIZE_INTEL + 512), "queue families");
+	if (output->json) {
+		strbuf_append_str(what, str, "{");
+	}
+	for (size_t i = 0; i < num_fams; ++i) {
+		const cl_queue_family_properties_intel  *fam = fams + i;
+		set_separator(output->mode == CLINFO_HUMAN ? full_padding : output->json ? comma_str : spc_str);
+		if (i > 0) strbuf_append_str(what, str, sep);
+		if (output->json || output->mode == CLINFO_HUMAN) {
+			strbuf_append(what, str,
+				output->json ?
+				"\"%s\" : { \"count\" : %u" :
+				"%-65s(%u)",
+				fam->name, fam->count);
+		} else {
+			strbuf_append(what, str, "%s:%u:", fam->name, fam->count);
+		}
+
+		if (output->json)
+			strbuf_append(what, str, ", \"proprerties\" : ");
+		else if (output->mode == CLINFO_HUMAN)
+			strbuf_append(what, str, "\n%115s", "Queue properties" INDENT);
+		strbuf_bitfield(what, str, fam->properties, "properties",
+			output->mode == CLINFO_RAW ? queue_prop_raw_str : queue_prop_str,
+			queue_prop_count, output);
+
+		if (output->json)
+			strbuf_append(what, str, ", \"capabilities\" : ");
+		else if (output->mode == CLINFO_HUMAN)
+			strbuf_append(what, str, "\n%115s", "Capabilities" INDENT);
+		else strbuf_append(what, str, ":");
+		strbuf_bitfield(what, str, fam->properties, "capabilities",
+			output->mode == CLINFO_RAW ? intel_queue_cap_raw_str : intel_queue_cap_str,
+			intel_queue_cap_count, output);
+		if (output->json)
+			strbuf_append(what, str, "}");
+	}
+	if (output->json)
+		strbuf_append_str(what, str, " }");
+}
+
+void
+device_info_qfamily_prop(struct device_info_ret *ret,
+	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
+	const struct opt_out *output)
+{
+	cl_queue_family_properties_intel *val = NULL;
+	size_t szval = 0, numval = 0;
+	GET_VAL_ARRAY(ret, loc);
+	if (!ret->err) {
+		strbuf_intel_queue_family(loc->pname, &ret->str, val, numval, output);
+		// TODO: ret->value.??? = val;
+	}
+	free(val);
+}
+
+
+/* Execution capabilities */
 void
 device_info_execap(struct device_info_ret *ret,
 	const struct info_loc *loc, const struct device_info_checks* UNUSED(chk),
@@ -2417,7 +2942,7 @@ device_info_execap(struct device_info_ret *ret,
 			execap_str : execap_raw_str);
 
 		if (output->mode != CLINFO_HUMAN) {
-			device_info_bitfield(ret, loc, chk, output, ret->value.qprop,
+			device_info_bitfield(ret, loc, chk, output, ret->value.execap,
 				execap_count, qpstr, "type");
 		} else { /* output->mode == CLINFO_HUMAN */
 			for (cl_uint i = 0; i < execap_count; ++i) {
@@ -2694,6 +3219,7 @@ struct device_info_traits dinfo_traits[] = {
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_NUMERIC_VERSION, "Device Numeric Version", version), dev_has_ext_ver },
 	{ CLINFO_BOTH, DINFO(CL_DRIVER_VERSION, "Driver Version", str), NULL },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_OPENCL_C_VERSION, "Device OpenCL C Version", str), dev_is_11 },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_OPENCL_C_NUMERIC_VERSION_KHR, "Device OpenCL C Numeric Version", version), dev_has_extended_versioning },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_OPENCL_C_ALL_VERSIONS, "Device OpenCL C all versions", ext_version), dev_is_30 },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_OPENCL_C_FEATURES, "Device OpenCL C features", ext_version), dev_is_30 },
 
@@ -2721,8 +3247,8 @@ struct device_info_traits dinfo_traits[] = {
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_LINKER_AVAILABLE, "Linker Available", bool), dev_is_12 },
 
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_MAX_COMPUTE_UNITS, "Max compute units", int), NULL },
-	{ CLINFO_HUMAN, DINFO(CL_DEVICE_COMPUTE_UNITS_BITFIELD_ARM, "Available core IDs", core_ids), dev_has_arm_core_id_v2 },
-	{ CLINFO_RAW, DINFO(CL_DEVICE_COMPUTE_UNITS_BITFIELD_ARM, "Available core IDs", long), dev_has_arm_core_id_v2 },
+	{ CLINFO_HUMAN, DINFO(CL_DEVICE_COMPUTE_UNITS_BITFIELD_ARM, "Available core IDs (ARM)", core_ids), dev_has_arm_core_id_v2 },
+	{ CLINFO_RAW, DINFO(CL_DEVICE_COMPUTE_UNITS_BITFIELD_ARM, "Available core IDs (ARM)", long), dev_has_arm_core_id_v2 },
 	{ CLINFO_HUMAN, DINFO(CL_DEVICE_JOB_SLOTS_ARM, "Available job slots (ARM)", job_slots), dev_has_arm_job_slots },
 	{ CLINFO_RAW, DINFO(CL_DEVICE_JOB_SLOTS_ARM, "Available job slots (ARM)", int), dev_has_arm_job_slots },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_SIMD_PER_COMPUTE_UNIT_AMD, "SIMD per compute unit (AMD)", int), dev_is_gpu_amd },
@@ -2742,6 +3268,15 @@ struct device_info_traits dinfo_traits[] = {
 	{ CLINFO_HUMAN, DINFO(CL_DEVICE_GFXIP_MAJOR_AMD, "Graphics IP (AMD)", gfxip_amd), dev_is_gpu_amd },
 	{ CLINFO_RAW, DINFO(CL_DEVICE_GFXIP_MAJOR_AMD, INDENT "Graphics IP MAJOR (AMD)", int), dev_is_gpu_amd },
 	{ CLINFO_RAW, DINFO(CL_DEVICE_GFXIP_MINOR_AMD, INDENT "Graphics IP MINOR (AMD)", int), dev_is_gpu_amd },
+
+	/* Device IP version (Intel) */
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_IP_VERSION_INTEL, "Device IP (Intel)", version), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_ID_INTEL, "Device ID (Intel)", int), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_NUM_SLICES_INTEL, "Slices (Intel)", int), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_NUM_SUB_SLICES_PER_SLICE_INTEL, "Sub-slices per slice (Intel)", int), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_NUM_EUS_PER_SUB_SLICE_INTEL, "EUs per sub-slice (Intel)", int), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_NUM_THREADS_PER_EU_INTEL, "Threads per EU (Intel)", int), dev_is_gpu_intel },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_FEATURE_CAPABILITIES_INTEL, "Feature capabilities (Intel)", intel_features), dev_is_gpu_intel },
 
 	{ CLINFO_BOTH, DINFO_SFX(CL_DEVICE_CORE_TEMPERATURE_ALTERA, "Core Temperature (Altera)", " C", int), dev_has_altera_dev_temp },
 
@@ -2799,6 +3334,14 @@ struct device_info_traits dinfo_traits[] = {
 	{ CLINFO_RAW, DINFO(CL_DEVICE_ADDRESS_BITS, "Address bits", int), NULL },
 	{ CLINFO_RAW, DINFO(CL_DEVICE_ENDIAN_LITTLE, "Little Endian", bool), NULL },
 
+	/* External memory */
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_EXTERNAL_MEMORY_IMPORT_HANDLE_TYPES_KHR, "External memory handle types", ext_mem), dev_has_external_memory },
+
+	/* Semaphores */
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_SEMAPHORE_TYPES_KHR, "Semaphore types", semaphore_types), dev_has_semaphore },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_SEMAPHORE_IMPORT_HANDLE_TYPES_KHR, "External semaphore import types", ext_semaphore_handles), dev_has_external_semaphore },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_SEMAPHORE_EXPORT_HANDLE_TYPES_KHR, "External semaphore export types", ext_semaphore_handles), dev_has_external_semaphore },
+
 	/* Global memory */
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_GLOBAL_MEM_SIZE, "Global memory size", mem), NULL },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_GLOBAL_FREE_MEMORY_AMD, "Global free memory (AMD)", free_mem_amd), dev_is_gpu_amd },
@@ -2812,6 +3355,13 @@ struct device_info_traits dinfo_traits[] = {
 
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_SVM_CAPABILITIES, "Shared Virtual Memory (SVM) capabilities", svm_cap), dev_has_svm },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_SVM_CAPABILITIES_ARM, "Shared Virtual Memory (SVM) capabilities (ARM)", svm_cap), dev_has_arm_svm },
+
+	{ CLINFO_HUMAN, DINFO_SFX(CL_FALSE, "Unified Shared Memory (USM)", "(cl_intel_unified_shared_memory)", str), dev_has_intel_usm },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL, "Host USM capabilities (Intel)", intel_usm_cap), dev_has_intel_usm },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_DEVICE_MEM_CAPABILITIES_INTEL, "Device USM capabilities (Intel)", intel_usm_cap), dev_has_intel_usm },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_SINGLE_DEVICE_SHARED_MEM_CAPABILITIES_INTEL, "Single-Device USM caps (Intel)", intel_usm_cap), dev_has_intel_usm },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_CROSS_DEVICE_SHARED_MEM_CAPABILITIES_INTEL, "Cross-Device USM caps (Intel)", intel_usm_cap), dev_has_intel_usm },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_SHARED_SYSTEM_MEM_CAPABILITIES_INTEL, "Shared System USM caps (Intel)", intel_usm_cap), dev_has_intel_usm },
 
 	/* Alignment */
 	{ CLINFO_BOTH, DINFO_SFX(CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, "Minimum alignment for any data type", bytes_str, int), NULL },
@@ -2899,6 +3449,12 @@ struct device_info_traits dinfo_traits[] = {
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_QUEUE_ON_DEVICE_MAX_SIZE, INDENT "Max size", mem), dev_is_20 },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_MAX_ON_DEVICE_QUEUES, "Max queues on device", int), dev_is_20 },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_MAX_ON_DEVICE_EVENTS, "Max events on device", int), dev_is_20 },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_QUEUE_FAMILY_PROPERTIES_INTEL, "Device queue families", qfamily_prop), dev_has_intel_queue_families },
+
+	/* Command buffers */
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_COMMAND_BUFFER_CAPABILITIES_KHR, "Command buffer capabilities", command_buffer_caps), dev_has_command_buffer },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_COMMAND_BUFFER_REQUIRED_QUEUE_PROPERTIES_KHR, INDENT "Required queue properties for command buffer", qprop), dev_has_command_buffer },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_MUTABLE_DISPATCH_CAPABILITIES_KHR, "Mutable dispatch capabilities", mutable_dispatch_caps), dev_has_mutable_dispatch },
 
 	/* Terminate context */
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_TERMINATE_CAPABILITY_KHR_1x, "Terminate capability (1.2 define)", terminate_capability), dev_has_terminate_context },
@@ -2936,6 +3492,7 @@ struct device_info_traits dinfo_traits[] = {
 
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_SCHEDULING_CONTROLS_CAPABILITIES_ARM, INDENT "Scheduling controls (ARM)", arm_scheduling_controls), dev_has_arm_scheduling_controls },
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_SUPPORTED_REGISTER_ALLOCATIONS_ARM, INDENT "Supported reg allocs (ARM)", intptr), dev_has_arm_register_alloc },
+	{ CLINFO_BOTH, DINFO(CL_DEVICE_MAX_WARP_COUNT_ARM, INDENT "Max warps/CU (ARM)", int), dev_has_arm_warp_count_support },
 
 	/* TODO: this should tell if it's being done due to the device being 2.1 or due to it having the extension */
 	{ CLINFO_BOTH, DINFO(CL_DEVICE_IL_VERSION, INDENT "IL version", str), dev_has_il },
@@ -3078,7 +3635,9 @@ printDeviceInfo(cl_device_id dev, const struct platform_list *plist, cl_uint p,
 					strbuf_append_str(loc.pname, &ret.str, not_specified(output));
 				}
 			}
-			if (output->brief)
+			if (output->brief && output->json)
+				json_stringify(RET_BUF(ret)->buf);
+			else if (output->brief)
 				printf("%s%s\n", line_pfx, RET_BUF(ret)->buf);
 			else if (output->json)
 				json_strbuf(RET_BUF(ret), loc.pname, n++, ret.err || ret.needs_escaping);
@@ -3121,6 +3680,8 @@ printDeviceInfo(cl_device_id dev, const struct platform_list *plist, cl_uint p,
 			break;
 		case CL_DEVICE_SCHEDULING_CONTROLS_CAPABILITIES_ARM:
 			chk.arm_register_alloc_support = !!(ret.value.sched_controls & CL_DEVICE_SCHEDULING_REGISTER_ALLOCATION_ARM);
+			// TODO warp count support should check for extension version >= 0.4
+			chk.arm_warp_count_support = !!(ret.value.sched_controls);
 			break;
 		default:
 			/* do nothing */
@@ -3288,7 +3849,8 @@ void printPlatformDevices(const struct platform_list *plist, cl_uint p,
 				(!output->offline ||
 				 !pdata->has_amd_offline ||
 				 these_are_offline));
-			if (output->mode == CLINFO_RAW)
+			if (output->json) { /* nothing to do */ }
+			else if (output->mode == CLINFO_RAW)
 				sprintf(line_pfx, "%" PRIu32 "%c%" PRIu32 ": ",
 					p,
 					these_are_offline ? '*' : '.',
@@ -3307,14 +3869,16 @@ void printPlatformDevices(const struct platform_list *plist, cl_uint p,
 		}
 
 		if (output->json)
-			printf("%s{", d > 0 ? comma_str : spc_str);
+			printf("%s%s",	(d > 0 ? comma_str : spc_str),
+				(output->brief ? "" : "{"));
 
 		printDeviceInfo(dev, plist, p, param_whitelist, output);
 
-		if (output->json)
-			printf(" }");
-		else if (output->detailed && d < pdata[p].ndevs - 1)
+		if (output->json) {
+			if (!output->brief) printf(" }");
+		} else if (output->detailed && d < pdata[p].ndevs - 1)
 			puts("");
+
 
 		fflush(stdout);
 		fflush(stderr);
@@ -3326,7 +3890,7 @@ void printPlatformDevices(const struct platform_list *plist, cl_uint p,
 
 void showDevices(const struct platform_list *plist, const struct opt_out *output)
 {
-	const cl_uint num_platforms = plist->num_platforms;
+	const cl_uint num_platforms = plist->num_platforms + (output->null_platform ? 1 : 0);
 	const cl_uint maxdevs = plist->max_devs;
 	const struct platform_data *pdata = plist->pdata;
 
@@ -3944,7 +4508,7 @@ struct icdl_data oclIcdProps(const struct platform_list *plist, const struct opt
 
 void version(void)
 {
-	puts("clinfo version 3.0.21.02.21");
+	puts("clinfo version 3.0.23.01.25");
 }
 
 void parse_device_spec(const char *str, struct opt_out *output)
@@ -4008,18 +4572,18 @@ void usage(void)
 	puts("Usage: clinfo [options ...]\n");
 	puts("Options:");
 	puts("\t--all-props, -a\t\ttry all properties, only show valid ones");
-	puts("\t--always-all-props, -At\tshow all properties, even if invalid");
-	puts("\t--human\t\thuman-friendly output (default)");
-	puts("\t--raw\t\traw output");
-	puts("\t--offline\talso show offline devices");
-	puts("\t--list, -l\tonly list the platforms and devices by name");
+	puts("\t--always-all-props, -A\tshow all properties, even if invalid");
+	puts("\t--human\t\t\thuman-friendly output (default)");
+	puts("\t--raw\t\t\traw output");
+	puts("\t--json\t\t\toutput raw data in JSON format (experimental)");
+	puts("\t--offline\t\talso show offline devices");
+	puts("\t--null-platform\t\talso show the NULL platform devices");
+	puts("\t--list, -l\t\tonly list the platforms and devices by name");
 	puts("\t--prop prop-name\tonly list properties matching the given name");
-	puts("\t--device p:d,");
-	puts("\t-d p:d\t\tonly show information about device number d from platform number p");
-	puts("\t-h, -?\t\tshow usage");
-	puts("\t--version, -v\tshow version\n");
-	puts("Defaults to raw mode if invoked with");
-	puts("a name that contains the string \"raw\"");
+	puts("\t--device p:d, -d p:d\tonly show information about device number d from platform number p");
+	puts("\t--help, -h, -?\t\tshow usage");
+	puts("\t--version, -v\t\tshow version\n");
+	puts("Defaults to raw mode if invoked with a name that contains the string \"raw\"");
 }
 
 int main(int argc, char *argv[])
@@ -4040,6 +4604,7 @@ int main(int argc, char *argv[])
 	output.cond = COND_PROP_CHECK;
 	output.brief = CL_FALSE;
 	output.offline = CL_FALSE;
+	output.null_platform = CL_FALSE;
 	output.json = CL_FALSE;
 	output.check_size = CL_FALSE;
 
@@ -4059,6 +4624,8 @@ int main(int argc, char *argv[])
 			output.mode = CLINFO_HUMAN;
 		else if (!strcmp(argv[a], "--offline"))
 			output.offline = CL_TRUE;
+		else if (!strcmp(argv[a], "--null-platform"))
+			output.null_platform = CL_TRUE;
 		else if (!strcmp(argv[a], "--json"))
 			output.json = CL_TRUE;
 		else if (!strcmp(argv[a], "-l") || !strcmp(argv[a], "--list"))
@@ -4071,7 +4638,7 @@ int main(int argc, char *argv[])
 		} else if (!strcmp(argv[a], "--prop")) {
 			++a;
 			parse_prop(argv[a], &output);
-		} else if (!strcmp(argv[a], "-?") || !strcmp(argv[a], "-h")) {
+		} else if (!strcmp(argv[a], "-?") || !strcmp(argv[a], "-h") || !strcmp(argv[a], "--help")) {
 			usage();
 			free_output(&output);
 			return 0;
@@ -4101,8 +4668,9 @@ int main(int argc, char *argv[])
 			 "Number of platforms" : "#PLATFORMS"),
 			plist.num_platforms);
 
+	cl_uint alloced_platforms = 0;
 	if (plist.num_platforms) {
-		alloc_plist(&plist);
+		alloced_platforms = alloc_plist(&plist, &output);
 		err = clGetPlatformIDs(plist.num_platforms, plist.platform, NULL);
 		CHECK_ERROR(err, "platform IDs");
 	}
@@ -4113,25 +4681,26 @@ int main(int argc, char *argv[])
 	if (output.json)
 		fputs("{ \"platforms\" : [", stdout);
 
-	for (p = 0; p < plist.num_platforms; ++p) {
+	for (p = 0; p < alloced_platforms; ++p) {
 		// skip non-selected platforms altogether
 		if (output.selected && output.platform != p) continue;
 
 		/* Open a JSON object for this platform */
 		if (output.json)
-			printf("%s{", p > 0 ? comma_str : spc_str);
+			printf("%s%s", (p > 0 ? comma_str : spc_str),
+				(output.brief ? "" : "{"));
 
 		gatherPlatformInfo(&plist, p, &output);
 
 		/* Close JSON object for this platform */
-		if (output.json)
+		if (output.json && !output.brief)
 			fputs(" }", stdout);
 		else if (output.detailed)
 			puts("");
 	}
 
 	/* Close JSON platforms list, open JSON devices list */
-	if (plist.num_platforms) {
+	if (alloced_platforms) {
 		if (output.json)
 			fputs(" ], \"devices\" : [", stdout);
 
